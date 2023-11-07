@@ -19,7 +19,7 @@ using ImprovedInput;
 namespace Pearlventory
 {
     [BepInPlugin("nc.pearlventory", "Pearlventory", "1.0.0")]
-    class PearlventoryMain : BaseUnityPlugin
+    public class PearlventoryMain : BaseUnityPlugin
     {
 
         /*
@@ -29,43 +29,109 @@ namespace Pearlventory
             {
                 return def;
             }
-            else// if (val != null)
+            else //if (val != null)
             {
                 return val;
             }
         }
         */
 
-        public static readonly PlayerKeybind IntakePearl = PlayerKeybind.Register("ncpearlventory:intakepearl", "Pearlventory", "Explode", KeyCode.LeftShift, KeyCode.JoystickButton3);
-        public static readonly PlayerKeybind OuttakePearl = PlayerKeybind.Register("ncpearlventory:outtakepearl", "Pearlventory", "Explode", KeyCode.LeftControl, KeyCode.JoystickButton4);
+        //public static void AbstractStoringItem() { var StorableAbstractItem = AbstractPhysicalObject.AbstractObjectType.DataPearl; }
 
-        public static int PearlAmount = 0; //the amount pearls the player is currently holding
-        public static int PearlLimit = PearlventoryOptions.MaxPearls.Value;//10; //the max amount of pearls the player can hold, default is ten(10)
+        //sealed class PlayerData { public int sleepTime; }
+
+        public static PlayerKeybind StoreItem; //= PlayerKeybind.Register("ncpearlventory:StoreItem", "Pearlventory", "Store Pearl", KeyCode.RightShift, KeyCode.JoystickButton3);
+        public static PlayerKeybind UnstoreItem; //= PlayerKeybind.Register("ncpearlventory:UnstoreItem", "Pearlventory", "Un-store Pearl", KeyCode.RightControl, KeyCode.JoystickButton4);
+        public static PlayerKeybind EatPearls;
+
+        public static int StoredItemAmount = 0; //the amount pearls the player is currently holding
+        
+        public static int StoredItemLimit = PearlventoryOptions.MaxPearls.Value; //10; //the max amount of pearls the player can hold, default is ten(10)
+
+        public static string modMessage = "from Pearlventory: ";
 
         public void OnEnable()
         {
+            try
+            {
+                StoreItem = PlayerKeybind.Register("ncpearlventory:StoreItem", "Pearlventory", "Store Pearl", KeyCode.RightShift, KeyCode.JoystickButton3);
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(modMessage + e);
+            }
+
+            try
+            {
+                UnstoreItem = PlayerKeybind.Register("ncpearlventory:UnstoreItem", "Pearlventory", "Un-store Pearl", KeyCode.RightControl, KeyCode.JoystickButton4);
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(modMessage + e);
+            }
+
+            try
+            {
+                EatPearls = PlayerKeybind.Register("ncpearlventory:UnstoreItem", "Pearlventory", "Un-store Pearl", KeyCode.RightAlt, KeyCode.JoystickButton5);
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(modMessage + e);
+            }
+
             On.Player.Update += Player_PearlIntake;
             On.Player.Update += Player_PearlOuttake;
             //On.HUD.HudPart.Draw += HudPart_Draw;
+            On.Player.Update += Player_GainFoodFromPearl;
             On.Player.Update += DebugInfo;
+
+            On.RainWorld.OnModsInit += RainWorld_OnModsInit;
         }
 
+        private void RainWorld_OnModsInit(On.RainWorld.orig_OnModsInit orig, RainWorld self)
+        {
+            orig(self);
+
+            MachineConnector.SetRegisteredOI("nc.pearlventory", new PearlventoryOptions());
+        }
 
         public static int Timer = 0;
         private void DebugInfo(On.Player.orig_Update orig, Player self, bool eu)
         {
             Timer++;
+            int TimerLimit = 160;
+            string DebugModNamePrefix = "Pearlventory, ";
+            string DebugPrefix = "Pearl";
 
-            if(Timer == 160)
+
+            if (Timer == TimerLimit)
             {
                 Timer = 0;
-                Logger.LogInfo("Pearlventory, PearlAmount:" + PearlAmount.ToString());
-                Logger.LogInfo("Pearlventory, PearlLimit:" + PearlLimit.ToString());
-                Debug.Log("Pearlventory, PearlAmount:" + PearlAmount.ToString());
-                Debug.Log("Pearlventory, PearlLimit:" + PearlLimit.ToString());
+                Logger.LogInfo(DebugModNamePrefix + DebugPrefix + "Amount:" + StoredItemAmount.ToString());
+                Logger.LogInfo(DebugModNamePrefix + DebugPrefix + "Limit:" + StoredItemLimit.ToString());
+                Debug.Log(DebugModNamePrefix + DebugPrefix + "Amount:" + StoredItemAmount.ToString());
+                Debug.Log(DebugModNamePrefix + DebugPrefix + "Limit:" + StoredItemLimit.ToString());
             }
 
             orig(self, eu);
+        }
+
+        private void Player_GainFoodFromPearl(On.Player.orig_Update orig, Player self, bool eu)
+        {
+            if (self.room.game.IsStorySession)
+            {
+                if (PearlventoryOptions.GainFood.Value == true)
+                {
+                    if (StoredItemAmount > 0)
+                    {
+                        if (/*Input.GetKeyDown(PearlventoryOptions.StoreItemKey.Value)*/ /*self.IsPressed(EatPearls)*/ Input.GetKey(KeyCode.RightAlt))
+                        {
+                            StoredItemAmount--;
+                            self.AddFood(PearlventoryOptions.FoodGained.Value);
+                        }
+                    }
+                }
+            }
         }
 
         private void Player_PearlOuttake(On.Player.orig_Update orig, Player self, bool eu)
@@ -74,14 +140,12 @@ namespace Pearlventory
             {
                 if (self.objectInStomach == null) //(self.grasps[0] == null)
                 {
-                    //if (self.grasps[0].grabbed is null) //(self.objectInStomach == null)
-                    //{
-                        if (PearlAmount > 0)
+                    if (StoredItemAmount > 0)
+                    {
+                        if (/*Input.GetKeyDown(PearlventoryOptions.UnstoreItemKey.Value)*/ /*self.IsPressed(UnstoreItem)*/ Input.GetKey(KeyCode.LeftControl))
                         {
-                            if (self.JustPressed(OuttakePearl)/*Input.GetKey(KeyCode.LeftControl)*/)
-                            {
-                                //IntVector2 tilePosition = self.room.game.cameras[0].room.GetTilePosition(Input.mousePosition + camOffset);
-                                //WorldCoordinate worldCoordinate = game.cameras[0].room.GetWorldCoordinate(tilePosition);
+                            //IntVector2 tilePosition = self.room.game.cameras[0].room.GetTilePosition(Input.mousePosition + camOffset);
+                            //WorldCoordinate worldCoordinate = game.cameras[0].room.GetWorldCoordinate(tilePosition);
                             #region PearlToHand
                                 //var pearl = new AbstractPhysicalObject(self.room.world, AbstractPhysicalObject.AbstractObjectType.DataPearl, null, /*self.abstractCreature.pos*/self.room.GetWorldCoordinate(self.firstChunk.pos), self.room.game.GetNewID()); //creates the pearl
                                 //self.room.abstractRoom.AddEntity(pearl); //adds the pearl to the room
@@ -98,10 +162,9 @@ namespace Pearlventory
                                 var stomachPearl = new AbstractConsumable(self.room.world, AbstractPhysicalObject.AbstractObjectType.DataPearl, null, self.room.GetWorldCoordinate(self.firstChunk.pos), self.room.game.GetNewID(), -1, -1, null);
                                 self.objectInStomach = stomachPearl;
                             #endregion
-                                PearlAmount--;
+                            StoredItemAmount--;
                             }
                         }
-                    //}
                 }
             }
 
@@ -118,15 +181,12 @@ namespace Pearlventory
                     {
                         if (self.grasps[0].grabbed is DataPearl)
                         {
-                            if (PearlAmount < PearlLimit)
+                            if (StoredItemAmount < StoredItemLimit)
                             {
-                                if (self.JustPressed(IntakePearl)/*Input.GetKey(KeyCode.LeftShift)*/)
+                                if (/*Input.GetKeyDown(PearlventoryOptions.StoreItemKey.Value)*/ /*self.IsPressed(StoreItem)*/ Input.GetKey(KeyCode.LeftShift))
                                 {
-                                    //if (self.grasps[0].grabbed is not null and DataPearl) //grasp redundancy
-                                    //{
                                     self.grasps[0].grabbed.Destroy(); //removes pearl from hand
-                                                                      //}
-                                    PearlAmount++;
+                                    StoredItemAmount++;
                                 }
                             }
                         }
